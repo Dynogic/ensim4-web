@@ -1,5 +1,7 @@
 # ensim4 (web)
 
+**▶ Play with it live: <https://dynogic.github.io/ensim4-web/>**
+
 A browser port of [glouw/ensim4](https://github.com/glouw/ensim4) — "the (fourth)
 internal combustion engine simulator": a real-time inline engine test-bed that
 uses isentropic nozzle flow, chamber thermodynamics, C8H18 combustion,
