@@ -1,7 +1,7 @@
 // Engine node graph model + selection (ported from node_s.h).
 
 import { type Chamber, normalizeChamber, normalizeInjectionChamber } from "./chamber";
-import { Piston, Valve } from "./mechanical";
+import { type PowerCell, type Valve } from "./mechanical";
 
 export const NodeType = {
   chamber: 0,
@@ -27,7 +27,7 @@ export const NODE_NAME_STRING = [
 export class Node {
   type: NodeType = NodeType.chamber;
   chamber: Chamber;
-  piston: Piston | null = null; // piston nodes
+  piston: PowerCell | null = null; // piston / rotor nodes
   valve: Valve | null = null; // irunner nodes
   waveIndex = 0; // eplenum nodes
   useCfd = false; // eplenum nodes

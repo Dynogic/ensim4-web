@@ -4,7 +4,16 @@ export const AUDIO_SAMPLE_RATE_HZ = 48000;
 export const MONITOR_REFRESH_RATE_HZ = 60;
 export const DT_S = 1.0 / AUDIO_SAMPLE_RATE_HZ;
 export const PI_R = 3.141592653589793;
+export const TWO_PI_R = 2.0 * PI_R;
 export const FOUR_PI_R = 4.0 * PI_R;
+export const SIX_PI_R = 6.0 * PI_R;
+
+// Diesel compression-ignition: above this static temperature the chamber
+// auto-ignites without a sparkplug. Set just below the peak compression temp of
+// a high-CR diesel (~630 K here; lower than textbook ~800 K because the fuel-air
+// mixture's γ is lower than pure air, so CR 20 only heats to ~630 K).
+export const DIESEL_AUTOIGNITION_K = 600.0;
+export const DIESEL_BURN_FRACTION = 0.25;
 
 export const SYNTH_BUFFER_SIZE = AUDIO_SAMPLE_RATE_HZ / MONITOR_REFRESH_RATE_HZ; // 800
 export const SYNTH_BUFFER_MIN_SIZE = 1 * SYNTH_BUFFER_SIZE;

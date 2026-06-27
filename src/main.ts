@@ -15,7 +15,10 @@
 import "./style.css";
 
 import { precomputeCp } from "./sim/gamma";
-import { buildEngine, ENGINE_8_CYL, ENGINE_3_CYL, type CylConfig } from "./sim/blueprints";
+import {
+  buildEngineFor, ALL_ENGINES, ENGINE_GROUPS,
+  type CylConfig,
+} from "./sim/blueprints";
 import { type Engine, type EngineTime } from "./sim/engine";
 import { Sampler } from "./sim/sampler";
 import { Synth } from "./sim/synth";
@@ -27,6 +30,7 @@ import { waveTable } from "./sim/wave";
 import { UIState, pushWidgets, type WidgetTime } from "./ui/widgets";
 import { Renderer, drawScene, radialNodeAt, XRES, YRES } from "./ui/render";
 import { setupControls, type Controller, type SelectMode } from "./ui/controls";
+import { syncThrottleSlider } from "./ui/controls";
 import { AudioOut } from "./audio";
 import { createRingSAB } from "./sim/audio-ring";
 import { createCommandSAB, CommandWriter, OP } from "./sim/command-queue";
@@ -41,7 +45,11 @@ const canUseSAB =
   typeof Atomics !== "undefined" &&
   (typeof crossOriginIsolated === "undefined" || crossOriginIsolated === true);
 
-const CFGS: CylConfig[] = [ENGINE_8_CYL, ENGINE_3_CYL];
+const CFGS: CylConfig[] = ALL_ENGINES;
+const ENGINE_GROUPS_UI = ENGINE_GROUPS.map((g) => ({
+  label: g.label,
+  engines: g.configs.map((c) => ({ name: c.name, id: ALL_ENGINES.indexOf(c) })),
+}));
 
 // Wall-clock audio duration of one produced buffer; the sim runs at N x real-time
 // when it computes a buffer in (BUFFER_MS / N) ms.
@@ -53,7 +61,7 @@ const updateRealtime = (instant: number): void => {
 };
 
 function freshEngine(cfgId: number): Engine {
-  const e = buildEngine(CFGS[cfgId]);
+  const e = buildEngineFor(CFGS[cfgId]);
   e.reset();
   // CFD on by default in SAB mode (parallel pipe workers sustain it, like the
   // native build); off in the legacy single-thread fallback where serial CFD
@@ -128,12 +136,13 @@ const sabController: Controller = {
   starter: (on) => cmdWriter?.push(OP.STARTER, on ? 1 : 0),
   ignite: () => cmdWriter?.push(OP.IGNITE),
   throttle: (lvl) => cmdWriter?.push(OP.THROTTLE, lvl),
+  throttleSet: (v) => cmdWriter?.push(OP.THROTTLE_SET, Math.round(v * 10000)),
   cfd: () => cmdWriter?.push(OP.CFD),
   convo: () => cmdWriter?.push(OP.CONVO),
   plotFilter: () => cmdWriter?.push(OP.PLOTFILTER),
   select: (mode) => cmdWriter?.push(OP.SELECT, SELECT_INDEX[mode]),
   toggleNode: (i) => cmdWriter?.push(OP.TOGGLE_NODE, i),
-  switchEngine: (which) => cmdWriter?.push(OP.SWITCH, which === "8cyl" ? 0 : 1),
+  switchEngine: (id) => cmdWriter?.push(OP.SWITCH, id),
 };
 
 const selectIntakes = () => {
@@ -158,6 +167,7 @@ const legacyController: Controller = {
       lvl === 0 ? engine.no_throttle : lvl === 1 ? engine.low_throttle :
       lvl === 2 ? engine.mid_throttle : engine.high_throttle;
   },
+  throttleSet: (v) => { engine.throttle_open_ratio = v; },
   cfd: () => engine.enableCfd(!engine.use_cfd),
   convo: () => { engine.use_convolution = !engine.use_convolution; },
   plotFilter: () => { engine.use_plot_filter = !engine.use_plot_filter; },
@@ -173,8 +183,7 @@ const legacyController: Controller = {
     sampler.clearChannel();
     engine.nodes[i].is_selected = !engine.nodes[i].is_selected;
   },
-  switchEngine: (which) => {
-    const id = which === "8cyl" ? 0 : 1;
+  switchEngine: (id) => {
     engine.copyFrom(freshEngine(id));
     sampler.clearChannel();
     sampler.index = 0;
@@ -185,7 +194,7 @@ const legacyController: Controller = {
 
 const controller = canUseSAB ? sabController : legacyController;
 
-setupControls(controller, () => { void resumeAudio(); });
+  setupControls(controller, ENGINE_GROUPS_UI, () => { void resumeAudio(); });
 
 canvas.addEventListener("pointerdown", (e) => {
   const rect = canvas.getBoundingClientRect();
@@ -240,6 +249,7 @@ function frameSAB(): void {
   if (snap) {
     applySnapshot(snap, engine, sampler, waveTable);
     samplerSynth.set(snap.synth);
+    syncThrottleSlider(snap.throttle);
     if (snap.waveMs > 0) updateRealtime(BUFFER_MS / snap.waveMs);
   }
   const t2 = now();
@@ -296,8 +306,11 @@ function frameLegacy(t: number): void {
     }
   }
   const t2 = now();
+  // Legacy mode: power_w is the cycle-averaged indicated power maintained in
+  // Engine.crank() (same as the worker), so nothing extra to compute here.
   wt.engine_time_ms = t2 - t1;
   if (producedCount > 0) updateRealtime((producedCount * BUFFER_MS) / (t2 - t1));
+  syncThrottleSlider(engine.throttle_open_ratio);
 
   ctx.setTransform(scale * dpr, 0, 0, scale * dpr, offsetX * dpr, offsetY * dpr);
   drawScene(renderer, engine, sampler, ui, samplerSynth);

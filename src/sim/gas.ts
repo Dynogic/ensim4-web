@@ -71,9 +71,19 @@ export function setAmbientAir(g: Gas): void {
   g.static_temperature_k = AMBIENT_STATIC_TEMPERATURE_K;
 }
 
-export function setAmbientAtomizedFuel(g: Gas): void {
+// Pure steam (water vapour) — the working fluid of a steam engine.
+export function setAmbientSteam(g: Gas): void {
   g.mol_ratio_n2 = 0;
   g.mol_ratio_o2 = 0;
+  g.mol_ratio_ar = 0;
+  g.mol_ratio_c8h18 = 0;
+  g.mol_ratio_co2 = 0;
+  g.mol_ratio_h2o = 1.0;
+  g.static_temperature_k = AMBIENT_STATIC_TEMPERATURE_K;
+}
+
+export function setAmbientAtomizedFuel(g: Gas): void {
+  g.mol_ratio_n2 = 0;  g.mol_ratio_o2 = 0;
   g.mol_ratio_ar = 0;
   g.mol_ratio_c8h18 = 1.0;
   g.mol_ratio_co2 = 0;

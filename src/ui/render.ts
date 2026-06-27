@@ -8,6 +8,7 @@ import {
 } from "../sim/sampler";
 import { type Node, NodeType, NODE_NAME_STRING, countNodeEdges } from "../sim/nodes";
 import { type Engine } from "../sim/engine";
+import { type Piston, type PowerCell } from "../sim/mechanical";
 import { LowpassFilter } from "../sim/filters";
 import { panicMessage } from "../sim/chamber";
 import { waveTable } from "../sim/wave";
@@ -27,6 +28,8 @@ const NODE_HALF_W = 16;
 const PLOT_LOWPASS_FILTER_HZ = 1000.0;
 const PISTON_SCALE_P_PER_M = 400.0;
 const PISTON_SPACE = 4.0;
+const ROTOR_CELL_W = 48;
+const ROTOR_HALF_W = ROTOR_CELL_W / 2;
 const ZERO_LINE_MIX = 0.66;
 const FLOW_CYCLE_SPINNER_DIVISOR = 2048;
 const MAX_DISPLAY_SAMPLES = MAX_SAMPLES / 16;
@@ -235,6 +238,82 @@ function drawPlots(r: Renderer, engine: Engine, sampler: Sampler): void {
 
 // --- Piston row -------------------------------------------------------
 
+function drawRotorCell(r: Renderer, engine: Engine, p: PowerCell, x: number, y: number): void {
+  const cx = x + ROTOR_HALF_W;
+  const cy = y + ROTOR_HALF_W + 8;
+  r.rect({ x, y: cy - ROTOR_HALF_W, w: ROTOR_CELL_W, h: ROTOR_CELL_W }, CONTAINER_COLOR);
+  // The rotor spins at 1/3 eccentric-shaft speed; all chambers share one rotor
+  // so they rotate in unison.
+  const a = engine.crankshaft.theta_r / 3.0;
+  const pts: Pt[] = [];
+  for (let k = 0; k < 3; k++) {
+    const ang = a + (2.0 * PI_R * k) / 3.0;
+    pts.push({ x: cx + ROTOR_HALF_W * 0.82 * Math.cos(ang), y: cy + ROTOR_HALF_W * 0.82 * Math.sin(ang) });
+  }
+  pts.push(pts[0]);
+  const color = p.sparkplug.isEnabled(engine.crankshaft) ? channelColor(3) : LINE_COLOR;
+  r.lines(pts, color);
+}
+
+// N-sided rotor (quasiturbine = 4), spinning at `gear` × shaft speed.
+function drawPolyRotorCell(r: Renderer, engine: Engine, p: PowerCell, x: number, y: number, sides: number, gear: number): void {
+  const cx = x + ROTOR_HALF_W;
+  const cy = y + ROTOR_HALF_W + 8;
+  r.rect({ x, y: cy - ROTOR_HALF_W, w: ROTOR_CELL_W, h: ROTOR_CELL_W }, CONTAINER_COLOR);
+  const a = gear * engine.crankshaft.theta_r;
+  const pts: Pt[] = [];
+  for (let k = 0; k < sides; k++) {
+    const ang = a + (2.0 * PI_R * k) / sides;
+    pts.push({ x: cx + ROTOR_HALF_W * 0.82 * Math.cos(ang), y: cy + ROTOR_HALF_W * 0.82 * Math.sin(ang) });
+  }
+  pts.push(pts[0]);
+  const color = p.sparkplug.isEnabled(engine.crankshaft) ? channelColor(3) : LINE_COLOR;
+  r.lines(pts, color);
+}
+
+// Opposed-piston: two boxes meeting in the middle (combustion in the centre).
+function drawOpposedCell(r: Renderer, engine: Engine, p: PowerCell, x: number, y: number): void {
+  const w = PISTON_SCALE_P_PER_M * 0.040;
+  const h = PISTON_SCALE_P_PER_M * 0.020;
+  const gap = 6;
+  const spark = p.sparkplug.isEnabled(engine.crankshaft);
+  const col = spark ? channelColor(3) : CONTAINER_COLOR;
+  // Crank angle drives the two opposed pistons; both retreat from centre away
+  // from TDC. Approximate the reciprocation with a cosine.
+  const theta = p.theta(engine.crankshaft);
+  const off = Math.cos(theta) * h * 0.5;
+  const top: Rect = { x, y: y + 16 - h - off, w, h };
+  const bot: Rect = { x, y: y + 16 + gap + off, w, h };
+  r.line({ x, y: y + 16 }, { x: x + w, y: y + 16 }, CONTAINER_COLOR);
+  r.fillOutlineRect(top, col, CONTAINER_COLOR);
+  r.fillOutlineRect(bot, col, CONTAINER_COLOR);
+}
+
+// Gas turbine: a spool — housing circle with spinning fan blades (front view of
+// a turbine wheel). Spins at shaft speed; glows when the combustor is
+// pressurized (gauge pressure > 0 = running).
+function drawTurbineCell(r: Renderer, engine: Engine, _p: PowerCell, x: number, y: number): void {
+  const cx = x + ROTOR_HALF_W;
+  const cy = y + ROTOR_HALF_W + 8;
+  const w = ROTOR_CELL_W;
+  // Housing.
+  r.rect({ x, y: cy - ROTOR_HALF_W, w, h: w }, CONTAINER_COLOR);
+  // Spinning fan: 8 blades at shaft speed.
+  const a = engine.crankshaft.theta_r;
+  const blades = 8;
+  const bladeColor = channelColor(6);
+  for (let k = 0; k < blades; k++) {
+    const ang = a + (2.0 * PI_R * k) / blades;
+    r.line(
+      { x: cx, y: cy },
+      { x: cx + ROTOR_HALF_W * 0.9 * Math.cos(ang), y: cy + ROTOR_HALF_W * 0.9 * Math.sin(ang) },
+      bladeColor,
+    );
+  }
+  // Hub dot — glows when the combustor is running (ignition on).
+  r.fillRect({ x: cx - 2, y: cy - 2, w: 4, h: 4 }, engine.can_ignite ? channelColor(3) : LINE_COLOR);
+}
+
 function drawPistons(r: Renderer, engine: Engine): void {
   let x = MID_X;
   let y = MID_Y - 32;
@@ -243,15 +322,36 @@ function drawPistons(r: Renderer, engine: Engine): void {
   for (const node of engine.nodes) {
     if (node.type === NodeType.piston && node.piston) {
       const p = node.piston;
+      if (p.kind === "rotor") {
+        drawRotorCell(r, engine, p, x, y);
+        x += PISTON_SPACE + ROTOR_CELL_W;
+        continue;
+      }
+      if (p.kind === "quasiturbine") {
+        drawPolyRotorCell(r, engine, p, x, y, 4, 1.0);
+        x += PISTON_SPACE + ROTOR_CELL_W;
+        continue;
+      }
+      if (p.kind === "turbine") {
+        drawTurbineCell(r, engine, p, x, y);
+        x += PISTON_SPACE + ROTOR_CELL_W;
+        continue;
+      }
+      if (p.kind === "opposed") {
+        drawOpposedCell(r, engine, p, x, y);
+        x += PISTON_SPACE + 2 * (PISTON_SCALE_P_PER_M * 0.040);
+        continue;
+      }
+      const pp = p as Piston;
       const head: Rect = {
-        x, y: PISTON_SCALE_P_PER_M * p.chamberDepthM() + y,
-        w: PISTON_SCALE_P_PER_M * p.diameter_m,
-        h: PISTON_SCALE_P_PER_M * p.head_compression_height_m * 2.0,
+        x, y: PISTON_SCALE_P_PER_M * pp.chamberDepthM() + y,
+        w: PISTON_SCALE_P_PER_M * pp.diameter_m,
+        h: PISTON_SCALE_P_PER_M * pp.head_compression_height_m * 2.0,
       };
       r.line({ x, y }, { x: x + head.w, y }, CONTAINER_COLOR);
       const conrodW = head.w / 4.0;
-      const conrod: Rect = { x: head.x + (head.w - conrodW) / 2.0, y: head.y + head.h, w: conrodW, h: PISTON_SCALE_P_PER_M * p.connecting_rod_length_m };
-      if (p.sparkplug.isEnabled(engine.crankshaft)) r.fillOutlineRect(head, channelColor(3), CONTAINER_COLOR);
+      const conrod: Rect = { x: head.x + (head.w - conrodW) / 2.0, y: head.y + head.h, w: conrodW, h: PISTON_SCALE_P_PER_M * pp.connecting_rod_length_m };
+      if (pp.sparkplug.isEnabled(engine.crankshaft)) r.fillOutlineRect(head, channelColor(3), CONTAINER_COLOR);
       r.rect(head, CONTAINER_COLOR);
       r.rect(conrod, CONTAINER_COLOR);
       x += PISTON_SPACE + head.w;
@@ -385,7 +485,17 @@ function drawRightInfo(r: Renderer, engine: Engine, ui: UIState): void {
     waveIdx++;
   }
   y = drawPanelInfo(r, ui.synthPanel, x, y, channelColor(6));
-  drawProgressBarInfo(r, ui.throttleBar, x, y, (v) => v.toFixed(2));
+  y = drawProgressBarInfo(r, ui.throttleBar, x, y, (v) => v.toFixed(2));
+  // Indicated power gauge (all engines): cycle-averaged gas torque × ω.
+  const powerKW = engine.power_w / 1000.0;
+  r.text(x, y, `power: ${powerKW.toFixed(1)} kW`, channelColor(2));
+  // Jet thrust gauge: thrust ∝ ω² (mass flow × velocity both scale with spool
+  // speed). Shown only for jet engines, below the throttle bar.
+  if (engine.is_jet) {
+    const omega = engine.crankshaft.angular_velocity_r_per_s;
+    const thrustKN = (omega * omega * 6.0e-3) / 1000.0;  // kN
+    r.text(x, y + LINE_SPACING, `thrust: ${thrustKN.toFixed(1)} kN`, channelColor(1));
+  }
 }
 
 function drawPanicMessage(r: Renderer): void {

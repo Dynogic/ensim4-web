@@ -6,6 +6,8 @@ import {
   SYNTH_BUFFER_SIZE,
   SYNTH_BUFFER_MAX_SIZE,
   min,
+  DIESEL_AUTOIGNITION_K,
+  DIESEL_BURN_FRACTION,
 } from "./constants";
 import {
   type Node,
@@ -18,8 +20,9 @@ import {
 import { Sampler } from "./sampler";
 import { Synth } from "./synth";
 import { Crankshaft, Flywheel, Starter, Limiter } from "./mechanical";
+import { Turbine } from "./mechanical";
 import { flow, mailGasMail } from "./nozzle";
-import { combustC8H18 } from "./chamber";
+import { combustC8H18, admitSteam } from "./chamber";
 import { calcMolAirFuelRatio, IDEAL_MOL_AIR_FUEL_RATIO } from "./gas";
 import { waveTable } from "./wave";
 
@@ -53,6 +56,14 @@ export class Engine {
   use_convolution = false;
   can_ignite = false;
   use_plot_filter = false;
+  is_diesel = false;
+  is_steam = false;
+  is_turbine = false;
+  is_jet = false;
+  power_w = 0;               // indicated (gas) power, cycle-averaged; patched from snapshot in SAB mode
+  private gas_torque_n_m = 0; // indicated (gas-only) torque from the last calcTorque()
+  private power_sum = 0;     // running ∑(gasTorque×ω) over the current 4π cycle
+  private power_count = 0;
 
   analyze(): void {
     for (let i = 0; i < this.nodes.length; i++) {
@@ -105,14 +116,20 @@ export class Engine {
 
   calcTorque(): number {
     let torque = 0;
+    let gas = 0;
     for (const n of this.nodes) {
       if (n.type === NodeType.piston && n.piston) {
-        torque += n.piston.gasTorque(this.crankshaft);
+        const gt = n.piston.gasTorque(this.crankshaft);
+        gas += gt;
+        torque += gt;
         torque += n.piston.inertiaTorque(this.crankshaft);
         torque += n.piston.frictionTorque(this.crankshaft);
       }
     }
     torque += this.starter.torqueOnFlywheel(this.flywheel, this.crankshaft);
+    // Stash the gas-only (indicated) torque for the power gauge. Net `torque`
+    // drives the dynamics; gas torque is what combustion develops on the piston.
+    this.gas_torque_n_m = gas;
     return torque;
   }
 
@@ -128,6 +145,14 @@ export class Engine {
 
   crank(sampler: Sampler): void {
     const torque = this.calcTorque();
+    // Accumulate INDICATED power (gas torque × ω) over a 4π cycle, finalized on
+    // the cycle wrap below. Use gas torque, NOT net torque: at steady-state RPM
+    // the net torque averages to ~0 (the crank no longer accelerates), so net×ω
+    // reads ~0 and flips sign cycle-to-cycle. Gas-only is the power combustion
+    // actually develops on the piston, which stays positive while firing.
+    const omega = this.crankshaft.angular_velocity_r_per_s;
+    this.power_sum += this.gas_torque_n_m * omega;
+    this.power_count++;
     const moi = this.calcMomentOfInertia();
     const alpha = torque / moi;
     this.crankshaft.accelerate(alpha);
@@ -138,6 +163,10 @@ export class Engine {
       const tx = t0 % FOUR_PI_R;
       const ty = t1 % FOUR_PI_R;
       if (ty < tx) {
+        // Crossed the 4π cycle boundary → finalize the cycle-average power.
+        if (this.power_count > 0) this.power_w = this.power_sum / this.power_count;
+        this.power_sum = 0;
+        this.power_count = 0;
         sampler.size = sampler.index;
         sampler.index = 0;
       } else {
@@ -153,8 +182,39 @@ export class Engine {
   combustPistonChambers(): void {
     for (const n of this.nodes) {
       if (n.type === NodeType.piston && n.piston) {
-        if (n.piston.sparkplug.voltage(this.crankshaft) > 0) {
-          combustC8H18(n.piston.chamber, 1.0);
+        const c = n.piston.chamber;
+        if (this.is_turbine) {
+          const t = n.piston as Turbine;
+          t.throttle_open = this.throttle_open_ratio;
+          // Continuous combustion: burn a fraction of whatever fuel is present
+          // every step (no spark gating). Track the burn rate for torque.
+          const before = c.gas.mol_ratio_c8h18;
+          if (before > 0.0) {
+            combustC8H18(c, 0.05);
+            t.burn_rate += (before - c.gas.mol_ratio_c8h18);
+          }
+        } else if (this.is_steam) {
+          // Steam admission: at the admission window (reusing the sparkplug
+          // timing as the admission phase), charge the chamber with high-
+          // pressure steam instead of combusting fuel.
+          if (n.piston.sparkplug.voltage(this.crankshaft) > 0) {
+            admitSteam(c);
+          }
+        } else if (this.is_diesel) {
+          // Compression ignition: auto-ignite when the charge is hot enough,
+          // but only on the expansion stroke (gasTorque > 0 = dV/dθ > 0 with
+          // positive gauge pressure). Firing during compression would produce
+          // negative torque; this confines the burn to just-after-TDC, like a
+          // real diesel's delayed direct-injection burn.
+          if (
+            c.gas.mol_ratio_c8h18 > 0.0 &&
+            c.gas.static_temperature_k > DIESEL_AUTOIGNITION_K &&
+            n.piston.gasTorque(this.crankshaft) > 0.0
+          ) {
+            combustC8H18(c, DIESEL_BURN_FRACTION);
+          }
+        } else if (n.piston.sparkplug.voltage(this.crankshaft) > 0) {
+          combustC8H18(c, 1.0);
         }
       }
     }
@@ -318,5 +378,10 @@ export class Engine {
     this.use_convolution = o.use_convolution;
     this.can_ignite = o.can_ignite;
     this.use_plot_filter = o.use_plot_filter;
+    this.is_diesel = o.is_diesel;
+    this.is_steam = o.is_steam;
+    this.is_turbine = o.is_turbine;
+    this.is_jet = o.is_jet;
+    this.power_w = o.power_w;
   }
 }

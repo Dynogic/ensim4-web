@@ -9,12 +9,13 @@ export const OP = {
   STARTER: 1,     // arg: 0|1
   IGNITE: 2,      // toggle
   THROTTLE: 3,    // arg: 0=no 1=low 2=mid 3=high
+  THROTTLE_SET: 10, // arg: throttle×10000 (continuous 0..1)
   CFD: 4,         // toggle
   CONVO: 5,       // toggle
   PLOTFILTER: 6,  // toggle
   SELECT: 7,      // arg: 0=pistons 1=intakes 2=exhausts 3=clear 4=next
   TOGGLE_NODE: 8, // arg: node index
-  SWITCH: 9,      // arg: 0=8cyl 1=3cyl
+  SWITCH: 9,      // arg: engine config id (index into CFGS)
 } as const;
 
 const HEAD = 0;

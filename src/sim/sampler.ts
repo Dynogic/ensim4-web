@@ -12,7 +12,7 @@ import {
 } from "./chamber";
 import { type Node, NodeType } from "./nodes";
 import { type NozzleFlow } from "./nozzle";
-import { type Crankshaft } from "./mechanical";
+import { type Crankshaft, Turbine } from "./mechanical";
 
 export const MAX_CHANNELS = 8;
 export const MAX_SAMPLES = 16384;
@@ -40,9 +40,11 @@ export const SampleName = {
   molar_combusted_ratio_co2_h2o: 16,
   momentum_kg_m_per_s: 17,
   gamma: 18,
+  molar_ratio_h2o: 19,
+  turbine_burn_rate: 20,
 } as const;
 export type SampleName = (typeof SampleName)[keyof typeof SampleName];
-export const SAMPLE_NAME_E_SIZE = 19;
+export const SAMPLE_NAME_E_SIZE = 21;
 
 export const SAMPLE_NAME_STRING: string[] = [
   "g_sample_volume_m3",
@@ -64,6 +66,8 @@ export const SAMPLE_NAME_STRING: string[] = [
   "g_sample_molar_combusted_ratio_co2_h2o",
   "g_sample_momentum_kg_m_per_s",
   "g_sample_gamma",
+  "g_sample_molar_ratio_h2o",
+  "g_sample_turbine_burn_rate",
 ];
 
 const STRIDE = MAX_CHANNELS * SAMPLE_NAME_E_SIZE * MAX_SAMPLES;
@@ -113,6 +117,11 @@ export class Sampler {
     this.sampleValue(SampleName.nozzle_speed_of_sound_m_per_s, ff.speed_of_sound_m_per_s);
     this.sampleValue(SampleName.gamma, calcMixedGamma(c.gas));
     this.sampleValue(SampleName.momentum_kg_m_per_s, c.gas.momentum_kg_m_per_s);
+    this.sampleValue(SampleName.molar_ratio_h2o, c.gas.mol_ratio_h2o);
+    this.sampleValue(
+      SampleName.turbine_burn_rate,
+      node.piston instanceof Turbine ? node.piston.burn_rate : 0,
+    );
     this.channel_index++;
   }
   clearChannel(): void {

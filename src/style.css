@@ -39,6 +39,8 @@ html, body {
   text-overflow: ellipsis;
 }
 #hint b { color: #fff; }
+
+/* Control bar — a glassy, centered panel grouped into sections. */
 #controls {
   position: fixed;
   left: 50%;
@@ -46,24 +48,103 @@ html, body {
   transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   max-width: 98vw;
-  padding: 6px;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(12, 14, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+#controls .grp {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#controls .div {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2px 2px;
 }
 #controls button {
   font-family: inherit;
   font-size: 11px;
-  color: #ddd;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 5px;
-  padding: 4px 8px;
+  color: #cdd;
+  background: #1b1f26;
+  border: 1px solid #2c333d;
+  border-radius: 6px;
+  padding: 5px 9px;
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
+  transition: background 0.12s, border-color 0.12s, transform 0.05s;
+  white-space: nowrap;
 }
-#controls button:hover { background: #333; }
-#controls button:active { background: #444; }
+#controls button:hover { background: #262d36; border-color: #3a4452; }
+#controls button:active { background: #313a45; transform: translateY(1px); }
+
+/* Throttle slider + live % readout. */
+#controls .thr {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 2px;
+}
+#controls input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 130px;
+  height: 4px;
+  border-radius: 3px;
+  background: #2c333d;
+  outline: none;
+  cursor: pointer;
+}
+#controls input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #5aa9ff;
+  border: none;
+  box-shadow: 0 0 6px rgba(90, 169, 255, 0.6);
+  transition: transform 0.08s;
+}
+#controls input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+#controls input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #5aa9ff;
+  border: none;
+  box-shadow: 0 0 6px rgba(90, 169, 255, 0.6);
+}
+#controls .pct {
+  font-size: 10px;
+  color: #7d8a99;
+  min-width: 30px;
+  text-align: right;
+}
+
+/* Engine picker dropdown. */
+#controls select.eng {
+  font-family: inherit;
+  font-size: 11px;
+  color: #cdd;
+  background: #1b1f26;
+  border: 1px solid #2c333d;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  max-width: 210px;
+  transition: border-color 0.12s;
+}
+#controls select.eng:hover { border-color: #3a4452; }
+#controls select.eng option,
+#controls select.eng optgroup { background: #1b1f26; }

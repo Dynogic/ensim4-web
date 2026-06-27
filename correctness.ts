@@ -6,7 +6,9 @@
 //
 //   node --import ./bench-register.mjs correctness.ts
 
-import { buildEngine, ENGINE_8_CYL, ENGINE_3_CYL } from "./src/sim/blueprints.ts";
+import {
+  buildEngineFor, ALL_ENGINES, type CylConfig,
+} from "./src/sim/blueprints.ts";
 import { precomputeCp } from "./src/sim/gamma.ts";
 import { Sampler } from "./src/sim/sampler.ts";
 import { Synth } from "./src/sim/synth.ts";
@@ -20,8 +22,8 @@ const makeEt = (): EngineTime => ({
   synth_time_ms: 0, wave_time_ms: 0,
 });
 
-function run(cfg: typeof ENGINE_8_CYL, cfd: boolean, buffers: number) {
-  const e = buildEngine(cfg);
+function run(cfg: CylConfig, cfd: boolean, buffers: number) {
+  const e = buildEngineFor(cfg);
   e.reset();
   e.enableCfd(cfd);
   e.use_convolution = true;
@@ -43,7 +45,16 @@ function run(cfg: typeof ENGINE_8_CYL, cfd: boolean, buffers: number) {
 precomputeCp();
 let allOk = true;
 
-for (const cfg of [ENGINE_8_CYL, ENGINE_3_CYL]) {
+// Optional CLI filter: `node ... correctness.ts Stirling` runs only engines
+// whose name contains "Stirling". Multiple substrings = OR. No args = all.
+const filters = process.argv.slice(2).map((s) => s.toLowerCase());
+const matches = (name: string) =>
+  filters.length === 0 || filters.some((f) => name.toLowerCase().includes(f));
+
+const ALL_CFGS = ALL_ENGINES;
+
+for (const cfg of ALL_CFGS) {
+  if (!matches(cfg.name)) continue;
   for (const cfd of [false, true]) {
     const B = cfd ? 20 : 40; // CFD on is heavier; fewer buffers
     const a = run(cfg, cfd, B);

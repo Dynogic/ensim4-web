@@ -12,7 +12,10 @@
 // input must come through the command queue.
 
 import { precomputeCp } from "./gamma";
-import { buildEngine, ENGINE_8_CYL, ENGINE_3_CYL, type CylConfig } from "./blueprints";
+import {
+  buildEngineFor, ALL_ENGINES,
+  type CylConfig,
+} from "./blueprints";
 import { type Engine, type EngineTime } from "./engine";
 import { Sampler } from "./sampler";
 import { Synth } from "./synth";
@@ -30,7 +33,7 @@ const TARGET_FILL = 2400;          // keep ~50 ms of audio queued (cushion vs la
 const WAIT_TIMEOUT_MS = 100;       // re-check commands at least this often
 const SNAPSHOT_EVERY_BUFFERS = 2;  // ~30 Hz viz
 
-const CFGS: CylConfig[] = [ENGINE_8_CYL, ENGINE_3_CYL];
+const CFGS: CylConfig[] = ALL_ENGINES;
 
 let prod: RingProducer;
 let cmd: CommandReader;
@@ -51,7 +54,7 @@ const et: EngineTime = {
 function buildFor(id: number): void {
   cfgId = id;
   const cfg = CFGS[id];
-  engine = buildEngine(cfg);
+  engine = buildEngineFor(cfg);
   engine.reset();
   engine.enableCfd(true);        // CFD on by default like the native build; pipe
                                  // solves run on their own workers so it sustains
@@ -85,6 +88,9 @@ function applyCommand(op: number, arg: number): void {
       engine.throttle_open_ratio =
         arg === 0 ? engine.no_throttle : arg === 1 ? engine.low_throttle :
         arg === 2 ? engine.mid_throttle : engine.high_throttle;
+      break;
+    case OP.THROTTLE_SET:
+      engine.throttle_open_ratio = arg / 10000.0;
       break;
     case OP.CFD: engine.enableCfd(!engine.use_cfd); break;
     case OP.CONVO: engine.use_convolution = !engine.use_convolution; break;

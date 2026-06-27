@@ -14,9 +14,22 @@ import {
   makeGas,
   setAmbientAir,
   setAmbientAtomizedFuel,
+  setAmbientSteam,
 } from "./gas";
 
 const C8H18_HEAT_OF_COMBUSTION_J_PER_MOL = 5.47e6;
+
+// Steam admission: replaces internal combustion for a steam engine. At the
+// admission phase the chamber is charged with high-pressure hot steam (pure
+// H2O), which then expands across the power stroke. Boiler pressure/temp are
+// external (constant), so this just resets the charge to steam at STEAM_*.
+const STEAM_PRESSURE_PA = 1.2e6;   // ~12 bar boiler pressure
+const STEAM_TEMPERATURE_K = 520.0; // superheated steam
+export function admitSteam(c: Chamber): void {
+  setAmbientSteam(c.gas);
+  c.gas.static_temperature_k = STEAM_TEMPERATURE_K;
+  c.gas.mass_kg = calcMassAtKg(c, STEAM_PRESSURE_PA);
+}
 
 export interface Chamber {
   gas: Gas;

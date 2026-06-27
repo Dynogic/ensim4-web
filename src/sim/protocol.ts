@@ -30,7 +30,7 @@ export type Cmd =
   | { t: "plotfilter" }
   | { t: "select"; mode: "pistons" | "intakes" | "exhausts" | "clear" | "next" }
   | { t: "toggleNode"; i: number }
-  | { t: "switchEngine"; which: "3cyl" | "8cyl" };
+  | { t: "switchEngine"; id: number };
 
 // ---- worker -> main -------------------------------------------------------
 
@@ -68,6 +68,7 @@ export interface Snapshot {
   synthMs: number;
   waveMs: number;
   audioFill: number;          // ring fill in samples
+  powerW: number;            // indicated power = cycle-avg gas torque × ω (computed in the worker)
 }
 
 function downsampleInto(
@@ -150,6 +151,7 @@ export class SnapshotPacker {
       omega: engine.crankshaft.angular_velocity_r_per_s,
       theta: engine.crankshaft.theta_r,
       throttle: engine.throttle_open_ratio,
+      powerW: engine.power_w,
       canIgnite: engine.can_ignite,
       starterOn: engine.starter.is_on,
       useCfd: engine.use_cfd,
@@ -203,6 +205,7 @@ export function applySnapshot(
   engine.crankshaft.angular_velocity_r_per_s = s.omega;
   engine.crankshaft.theta_r = s.theta;
   engine.throttle_open_ratio = s.throttle;
+  engine.power_w = s.powerW;
   engine.can_ignite = s.canIgnite;
   engine.starter.is_on = s.starterOn;
   engine.use_cfd = s.useCfd;
