@@ -53,12 +53,10 @@ html, body {
   gap: 6px;
   max-width: 98vw;
   padding: 6px 8px;
-  background: rgba(12, 14, 18, 0.72);
+  background: rgba(12, 14, 18, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 #controls .grp {
   display: flex;
