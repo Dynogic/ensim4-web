@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>ensim4 — web</title>
+    <!-- Enable cross-origin isolation (COOP/COEP) via a service worker so that
+         SharedArrayBuffer works on static hosts like GitHub Pages. No-op if the
+         host already sends the headers or if SW is unavailable. -->
+    <script src="./coi-serviceworker.js"></script>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="hint">
+      Hold <b>Starter</b> (or <b>Space</b>), then tap <b>Ignition</b> (or <b>D</b>); throttle with
+      <b>H J K L</b>. Click nodes to inspect. <b>Y</b> CFD (1-D pipe, on by default) /
+      <b>T</b> convolution / <b>U</b> plot filter. If audio stutters, disable <b>Y</b>.
+    </div>
+    <div id="controls"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
