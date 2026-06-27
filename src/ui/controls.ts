@@ -177,6 +177,9 @@ export function setupControls(controller: Controller, engineGroups: EngineGroup[
   sel.addEventListener("change", () => {
     controller.switchEngine(parseInt(sel.value, 10));
     onGesture();
+    // Drop focus so the <select> stops capturing keyboard (Space would reopen
+    // the dropdown; letter keys would jump-select options).
+    sel.blur();
   });
   gEng.appendChild(sel);
 }
