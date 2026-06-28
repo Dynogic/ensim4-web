@@ -238,11 +238,14 @@ export class Engine {
         const fc = n.piston as FuelCell;
         const c = fc.chamber;
         fc.throttle_open = this.throttle_open_ratio;
-        const o2avail = Math.min(1.0, c.gas.mol_ratio_o2 / 0.21);
-        if (c.gas.mol_ratio_o2 > 0.001 && fc.throttle_open > 0.0) {
-          reactFuelCell(c, (0.15 + 0.85 * fc.throttle_open) * 0.04);
+        // reaction_rate is throttle-driven (not O2-limited): a real fuel-cell
+        // controller modulates H2 flow to match available air, so the electrical
+        // output tracks demand. O2 is consumed at a tiny rate just for gas-
+        // composition tracking (the scope shows O2 depleting / H2O rising).
+        fc.reaction_rate = 0.15 + 0.85 * fc.throttle_open;
+        if (c.gas.mol_ratio_o2 > 0.001) {
+          reactFuelCell(c, 0.002);
         }
-        fc.reaction_rate = (0.15 + 0.85 * fc.throttle_open) * o2avail;
       }
     }
   }

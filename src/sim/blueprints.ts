@@ -1104,7 +1104,7 @@ export const ENGINE_FUELCELL: CylConfig = {
   radial_spacing: 3.0,
   fuelcell: true,
   fuelcell_stack_volume_m3: 5.0e-4,
-  fuelcell_torque_constant: 500,            // torque = K × reaction_rate; peak ~100-200 kW with motor curve
+  fuelcell_torque_constant: 250,            // peak ~100 kW (K × reaction_rate × base_ω)
   fuelcell_rotor_mass_kg: 1.2,
   fuelcell_rotor_radius_m: 0.06,
   piston_dynamic_friction_n_m_s_per_r: 0.01,
