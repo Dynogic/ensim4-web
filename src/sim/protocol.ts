@@ -69,6 +69,7 @@ export interface Snapshot {
   waveMs: number;
   audioFill: number;          // ring fill in samples
   powerW: number;            // indicated power = cycle-avg gas torque × ω (computed in the worker)
+  limiterEnabled: boolean;   // rev limiter on/off (toggled by user)
 }
 
 function downsampleInto(
@@ -153,6 +154,7 @@ export class SnapshotPacker {
       throttle: engine.throttle_open_ratio,
       powerW: engine.power_w,
       canIgnite: engine.can_ignite,
+      limiterEnabled: engine.limiter.enabled,
       starterOn: engine.starter.is_on,
       useCfd: engine.use_cfd,
       useConvolution: engine.use_convolution,
@@ -207,6 +209,7 @@ export function applySnapshot(
   engine.throttle_open_ratio = s.throttle;
   engine.power_w = s.powerW;
   engine.can_ignite = s.canIgnite;
+  engine.limiter.enabled = s.limiterEnabled;
   engine.starter.is_on = s.starterOn;
   engine.use_cfd = s.useCfd;
   engine.use_convolution = s.useConvolution;

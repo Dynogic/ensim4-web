@@ -478,6 +478,7 @@ function drawLeftInfo(r: Renderer, engine: Engine, ui: UIState): void {
     ["    t: use_convolution", active(engine.use_convolution)],
     ["    y: use_cfd", active(engine.use_cfd)],
     ["    u: use_plot_filter", active(engine.use_plot_filter)],
+    ["    x: rev_limiter", active(engine.limiter.enabled)],
     ["    d: ignition_on", active(engine.can_ignite)],
     ["space: starter_on", active(engine.starter.is_on)],
     ["------ nodes --------------", TEXT_COLOR],
