@@ -1104,7 +1104,7 @@ export const ENGINE_FUELCELL: CylConfig = {
   radial_spacing: 3.0,
   fuelcell: true,
   fuelcell_stack_volume_m3: 5.0e-4,
-  fuelcell_torque_constant: 250,            // peak ~100 kW (K × reaction_rate × base_ω)
+  fuelcell_torque_constant: 220,            // low-power (~500 W), near-silent fuel cell
   fuelcell_rotor_mass_kg: 1.2,
   fuelcell_rotor_radius_m: 0.06,
   piston_dynamic_friction_n_m_s_per_r: 0.01,

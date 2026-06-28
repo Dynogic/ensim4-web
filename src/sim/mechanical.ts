@@ -648,7 +648,6 @@ export class FuelCell implements PowerCell {
   sparkplug: Sparkplug;
   stack_volume_m3 = 0;          // constant chamber volume (the stack)
   torque_constant = 0;          // shaft torque per unit reaction rate (0..1)
-  base_omega_r_per_s = 400;     // motor base speed: constant-torque below, constant-power above
   rotor_mass_kg = 0;            // motor rotor mass (for MoI)
   rotor_radius_m = 0;
   dynamic_friction_n_m_s_per_r = 0;
@@ -668,13 +667,7 @@ export class FuelCell implements PowerCell {
     return this.stack_volume_m3;
   }
   gasTorque(_crank: Crankshaft): number {
-    // Electric motor torque curve: constant torque up to base speed, then
-    // constant power (torque ∝ 1/ω) — back-EMF limits current at high speed,
-    // just like a real EV motor. Without this, torque × ω grows unbounded.
-    const baseTorque = this.torque_constant * this.reaction_rate;
-    const omega = _crank.angular_velocity_r_per_s;
-    if (omega < this.base_omega_r_per_s) return baseTorque;
-    return baseTorque * this.base_omega_r_per_s / omega;
+    return this.torque_constant * this.reaction_rate;
   }
   momentOfInertia(): number {
     return 0.5 * this.rotor_mass_kg * this.rotor_radius_m * this.rotor_radius_m;
