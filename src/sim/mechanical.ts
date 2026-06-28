@@ -23,7 +23,7 @@ export const STATIC_FRICTION_UPPER_ANGULAR_VELOCITY = FOUR_PI_R;
 // epitrochoid) both implement this; the rest of the sim is engine-agnostic and
 // drives any PowerCell through this surface.
 export interface PowerCell {
-  kind: "piston" | "rotor" | "opposed" | "quasiturbine" | "stirling" | "turbine";
+  kind: "piston" | "rotor" | "opposed" | "quasiturbine" | "stirling" | "turbine" | "fuelcell";
   chamber: Chamber;
   valve: Valve;
   sparkplug: Sparkplug;
@@ -631,5 +631,66 @@ export class Turbine implements PowerCell {
     // (e.g. limiter cuts ignition). compress() runs every step (rig() does not
     // for the turbine), so the decay must live here.
     this.burn_rate *= 0.9;
+  }
+}
+
+// Fuel-cell power cell (electrochemical): a constant-volume stack where H2 + O2
+// → H2O generates electricity that drives a motor. Unlike the turbine there is
+// no combustion heat driving pressure — the reaction is electrochemical, so
+// torque tracks the reaction rate near-instantly (no spool lag). The reaction
+// consumes O2 from the air charge and produces H2O; H2 fuel is admitted
+// internally (not a tracked gas species). The result is a smooth, silent,
+// instant-response power source — the opposite of a spooling turbine.
+export class FuelCell implements PowerCell {
+  kind = "fuelcell" as const;
+  chamber: Chamber;
+  valve: Valve;
+  sparkplug: Sparkplug;
+  stack_volume_m3 = 0;          // constant chamber volume (the stack)
+  torque_constant = 0;          // shaft torque per unit reaction rate (0..1)
+  rotor_mass_kg = 0;            // motor rotor mass (for MoI)
+  rotor_radius_m = 0;
+  dynamic_friction_n_m_s_per_r = 0;
+  static_friction_n_m_s_per_r = 0;
+  theta_r = 0;
+  reaction_rate = 0;            // normalized 0..1 electrochemical power level
+  throttle_open = 1;
+  constructor(chamber: Chamber, valve: Valve, sparkplug: Sparkplug) {
+    this.chamber = chamber;
+    this.valve = valve;
+    this.sparkplug = sparkplug;
+  }
+  theta(crank: Crankshaft): number {
+    return crank.theta_r;  // phaseless (continuous flow)
+  }
+  volumeM3(): number {
+    return this.stack_volume_m3;
+  }
+  gasTorque(_crank: Crankshaft): number {
+    // Instant: torque = K × reaction_rate. No throttle multiplier — the
+    // reaction_rate already encodes throttle × O2 availability (set directly in
+    // the combust step), so response is immediate, unlike the turbine's EMA lag.
+    return this.torque_constant * this.reaction_rate;
+  }
+  momentOfInertia(): number {
+    return 0.5 * this.rotor_mass_kg * this.rotor_radius_m * this.rotor_radius_m;
+  }
+  inertiaTorque(_crank: Crankshaft): number {
+    return 0.0;
+  }
+  frictionTorque(crank: Crankshaft): number {
+    const isStatic = Math.abs(crank.angular_velocity_r_per_s) < STATIC_FRICTION_UPPER_ANGULAR_VELOCITY;
+    const fric = isStatic ? this.static_friction_n_m_s_per_r : this.dynamic_friction_n_m_s_per_r;
+    return -1.0 * crank.angular_velocity_r_per_s * fric;
+  }
+  rig(_crank: Crankshaft): void {
+    this.chamber.volume_m3 = this.stack_volume_m3;
+  }
+  compress(_crank: Crankshaft): void {
+    this.chamber.volume_m3 = this.stack_volume_m3;  // no adiabatic (no volume change)
+    // Quick ramp-down when the reaction stops (limiter cuts can_ignite → combust
+    // stops running). Faster than the turbine's 0.9 decay — a fuel cell's
+    // electrical response is near-instant in both directions.
+    this.reaction_rate *= 0.85;
   }
 }

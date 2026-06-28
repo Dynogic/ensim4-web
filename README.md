@@ -15,7 +15,7 @@ flow, NASA-Glenn cp polynomials, C8H18 combustion, crank/piston kinematics, the
 (Ford 1.0 L EcoBoost I3, Inline-8) are reproduced exactly, with the same 48 kHz /
 800-sample / 60 Hz cadence and the same radial-graph + scope-plot visualizer.
 
-On top of that faithful port, this version **extends the simulator to 29 engines
+On top of that faithful port, this version **extends the simulator to 30 engines
 across six families** — piston, diesel, two-stroke, alternative-cycle, rotary,
 and external/continuous-combustion — all driven by a polymorphic `PowerCell`
 interface so the same physics core (nozzle flow, thermodynamics, CFD, audio)
@@ -36,7 +36,7 @@ audio callback or free threads.
 - **Audio** runs on its own thread (sim worker → `SharedArrayBuffer` ring →
   AudioWorklet), so it's immune to render/GC jank and **keeps running when the
   tab is backgrounded** (paced by `Atomics.wait`, not `rAF`).
-- The Node harness verifies **all 29 engines** are deterministic (two identical
+- The Node harness verifies **all 30 engines** are deterministic (two identical
   runs produce bit-identical audio, `detMaxDiff = 0`), NaN-free, and
   self-sustaining off the starter. The parallel CFD path is bit-for-bit identical
   to the serial path; the SPSC ring is lossless; snapshots reproduce every
@@ -117,7 +117,7 @@ The control bar is organized into four sections split by dividers:
 
 ## Engines
 
-29 engines across six families, all running on the same physics core. Pick one
+30 engines across six families, all running on the same physics core. Pick one
 from the **Engine** dropdown (grouped by family). Startup for most: hold **Space**
 (starter) + press **D** (ignite) → release Space once it's firing → throttle up
 with **K**/**L** or the slider. Exceptions are noted below.
@@ -174,6 +174,7 @@ with **K**/**L** or the slider. Exceptions are noted below.
 | Steam Engine | H2O working fluid, steam admission (no spark) |
 | Gas Turbine | Continuous combustion; **D** ignites the burner, throttle to spool |
 | Jet Engine (Turbojet) | Turbine + thrust gauge; Space → D → **L** full → spools to ~2800 r/s, thrust ~48 kN |
+| Fuel Cell (PEM) | Electrochemical H2+O2→H2O (NOT combustion); **D** enables the reaction. Instant torque response — no spool lag. Silent, cool, consumes O2, produces H2O |
 
 > Diesel auto-ignition is gated to the **expansion stroke** (gas torque > 0) at
 > chamber temp > 600 K — so it can't fire while the valves are open. Turbines
@@ -266,7 +267,7 @@ runs each exhaust pipe's solver on its own thread; this fans them out:
 - `src/sim/wave.ts`, `src/sim/engine.ts` — dispatch pipes → run step loop → join
   → mix (pipes solve in parallel **and** overlap the step loop).
 
-### The PowerCell architecture (how 29 engines share one core)
+### The PowerCell architecture (how 30 engines share one core)
 
 Every chamber attaches to a `PowerCell` (`src/sim/mechanical.ts`) — a polymorphic
 interface with `theta()`, `volumeM3()`, `gasTorque()`, `inertiaTorque()`,
@@ -281,6 +282,10 @@ interface with `theta()`, `volumeM3()`, `gasTorque()`, `inertiaTorque()`,
   heat exchange (hot on expansion, cold on compression), no combustion.
 - **`Turbine`** — continuous combustion; torque `K · burn_rate · (0.15+0.85·throttle)`,
   `burn_rate` an EMA of fuel burn.
+- **`FuelCell`** — electrochemical (H2+O2→H2O); torque `K · reaction_rate` where
+  `reaction_rate` tracks throttle × O2-availability **instantly** (no EMA lag).
+  Runs in its own `reactFuelCellChambers()` step, not `combustPistonChambers()` —
+  a fuel cell does not combust. No C8H18 injection; H2 admitted internally.
 
 `engine.ts`, `sampler.ts`, and `protocol.ts` dispatch on `kind` so the same
 stepping, sampling, and snapshot code drives every type. Engine configs are built
@@ -300,7 +305,7 @@ bit-identical), and a `profile` (`"poppet"` | `"sleeve"` sine pulse).
 - **CFD on by default** to match the C build.
 - **Power gauge** (indicated power) and **thrust gauge** (jet).
 - **Continuous throttle slider** with a live % readout, synced from the engine.
-- **Grouped engine dropdown** — 29 engines in six `<optgroup>` families.
+- **Grouped engine dropdown** — 30 engines in six `<optgroup>` families.
 - **Bug fix**: per-buffer `synth.clear()` (a catch-up loop could re-post a stale
   buffer).
 - Graceful fallback to the single-thread path when not cross-origin isolated.
@@ -313,7 +318,7 @@ Node scripts at the repo root (browser automation couldn't reach `localhost`):
 
 | File | Purpose |
 |---|---|
-| `correctness.ts` | Determinism + sanity for **all 29 engines**: identical inputs → identical audio (`detMaxDiff=0`); no NaN; self-sustaining off the starter; CFD off and on. **Filterable**: `node ... correctness.ts Stirling Steam` runs only engines whose name contains a filter substring (OR) |
+| `correctness.ts` | Determinism + sanity for **all 30 engines**: identical inputs → identical audio (`detMaxDiff=0`); no NaN; self-sustaining off the starter; CFD off and on. **Filterable**: `node ... correctness.ts Stirling Steam` runs only engines whose name contains a filter substring (OR) |
 | `bench.ts` | Per-frame timing (RT multiple) across configs |
 | `test-cfd.ts` | Parallel CFD == serial CFD, bit-identical |
 | `test-ring.ts` | SPSC ring lossless over 5 M samples |
@@ -323,7 +328,7 @@ Node scripts at the repo root (browser automation couldn't reach `localhost`):
 Run with the custom loader (handles extensionless + JSON imports):
 
 ```bash
-node --import ./bench-register.mjs correctness.ts            # all 29 engines
+node --import ./bench-register.mjs correctness.ts            # all 30 engines
 node --import ./bench-register.mjs correctness.ts Turbine Jet  # just the ones matching a filter
 node --import ./bench-register.mjs bench.ts
 ```

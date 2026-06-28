@@ -20,9 +20,9 @@ import {
 import { Sampler } from "./sampler";
 import { Synth } from "./synth";
 import { Crankshaft, Flywheel, Starter, Limiter } from "./mechanical";
-import { Turbine } from "./mechanical";
+import { Turbine, FuelCell } from "./mechanical";
 import { flow, mailGasMail } from "./nozzle";
-import { combustC8H18, admitSteam } from "./chamber";
+import { combustC8H18, admitSteam, reactFuelCell } from "./chamber";
 import { calcMolAirFuelRatio, IDEAL_MOL_AIR_FUEL_RATIO } from "./gas";
 import { waveTable } from "./wave";
 
@@ -60,6 +60,7 @@ export class Engine {
   is_steam = false;
   is_turbine = false;
   is_jet = false;
+  is_fuelcell = false;
   power_w = 0;               // indicated (gas) power, cycle-averaged; patched from snapshot in SAB mode
   private gas_torque_n_m = 0; // indicated (gas-only) torque from the last calcTorque()
   private power_sum = 0;     // running ∑(gasTorque×ω) over the current 4π cycle
@@ -226,6 +227,26 @@ export class Engine {
     }
   }
 
+  // Fuel-cell electrochemical reaction (NOT combustion): H2 + O2 → H2O. The H2
+  // fuel is admitted internally (not a tracked gas species, no injector); the
+  // reaction consumes O2 from the air charge and produces H2O + electricity.
+  // Torque tracks throttle × O2-availability INSTANTLY (no spool lag). This is
+  // kept separate from combustPistonChambers() — a fuel cell does not combust.
+  reactFuelCellChambers(): void {
+    for (const n of this.nodes) {
+      if (n.type === NodeType.piston && n.piston) {
+        const fc = n.piston as FuelCell;
+        const c = fc.chamber;
+        fc.throttle_open = this.throttle_open_ratio;
+        const o2avail = Math.min(1.0, c.gas.mol_ratio_o2 / 0.21);
+        if (c.gas.mol_ratio_o2 > 0.001 && fc.throttle_open > 0.0) {
+          reactFuelCell(c, fc.throttle_open * 0.08);
+        }
+        fc.reaction_rate = fc.throttle_open * o2avail;
+      }
+    }
+  }
+
   updateNozzleOpenRatios(): void {
     const nodes = this.nodes;
     for (let i = 0; i < nodes.length; i++) {
@@ -241,6 +262,13 @@ export class Engine {
           break;
         }
         case NodeType.injector: {
+          // Fuel cells admit H2 internally (electrochemical, not combustion) —
+          // no gasoline (C8H18) injection. All other engines inject fuel when
+          // the charge is lean.
+          if (this.is_fuelcell) {
+            node.chamber.nozzle_open_ratio = 0.0;
+            break;
+          }
           const chamber = nodes[node.nozzleIndex].chamber;
           if (chamber.nozzle_open_ratio > 0) {
             const piston = nodes[node.next[0]].piston!;
@@ -328,7 +356,10 @@ export class Engine {
     const starterAngVel = this.starter.angularVelocity(this.flywheel, this.crankshaft);
     sampler.sampleStarter(starterAngVel);
     const t2 = et.getTicksMs();
-    if (this.can_ignite) this.combustPistonChambers();
+    if (this.can_ignite) {
+      if (this.is_fuelcell) this.reactFuelCellChambers();
+      else this.combustPistonChambers();
+    }
     const t3 = et.getTicksMs();
     et.fluids_time_ms += t1 - t0;
     et.kinematics_time_ms += t2 - t1;
@@ -382,6 +413,7 @@ export class Engine {
     this.is_steam = o.is_steam;
     this.is_turbine = o.is_turbine;
     this.is_jet = o.is_jet;
+    this.is_fuelcell = o.is_fuelcell;
     this.power_w = o.power_w;
   }
 }

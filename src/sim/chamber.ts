@@ -245,6 +245,30 @@ export function combustC8H18(c: Chamber, fraction: number): void {
   c.gas.static_temperature_k += energyJPerMol / calcMixedCv(c.gas);
 }
 
+// Fuel-cell electrochemical reaction: 2H2 + O2 → 2H2O. H2 is admitted
+// internally (not a tracked species); the reaction consumes O2 from the air
+// charge and produces H2O. Unlike combustion, most energy becomes electrical
+// work (extracted as shaft torque in Engine.combustPistonChambers), so only a
+// waste-heat fraction raises the gas temperature — a fuel cell runs far cooler
+// than a combustor. (ΔH ≈ 242 kJ/mol H2O; ~55% electrical → ~45% waste heat.)
+const H2_O2_REACTION_ENTHALPY_J_PER_MOL_O2 = 4.84e5;  // 2 × 242 kJ per mol O2
+const FUELCELL_WASTE_HEAT_FRACTION = 0.45;
+export function reactFuelCell(c: Chamber, fraction: number): void {
+  const molRatioO2 = c.gas.mol_ratio_o2 * fraction;
+  if (molRatioO2 <= 0) return;
+  c.gas.mol_ratio_o2 -= molRatioO2;
+  c.gas.mol_ratio_h2o += 2.0 * molRatioO2;
+  const molRatio = calcMolRatio(c);
+  c.gas.mol_ratio_n2 /= molRatio;
+  c.gas.mol_ratio_o2 /= molRatio;
+  c.gas.mol_ratio_ar /= molRatio;
+  c.gas.mol_ratio_c8h18 /= molRatio;
+  c.gas.mol_ratio_co2 /= molRatio;
+  c.gas.mol_ratio_h2o /= molRatio;
+  const wasteHeatJ = molRatioO2 * H2_O2_REACTION_ENTHALPY_J_PER_MOL_O2 * FUELCELL_WASTE_HEAT_FRACTION;
+  c.gas.static_temperature_k += wasteHeatJ / calcMixedCv(c.gas);
+}
+
 export function mixInGas(c: Chamber, mail: Gas): void {
   const selfMoles = calcMoles(c.gas);
   const mailMoles = calcMoles(mail);

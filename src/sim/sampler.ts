@@ -12,7 +12,7 @@ import {
 } from "./chamber";
 import { type Node, NodeType } from "./nodes";
 import { type NozzleFlow } from "./nozzle";
-import { type Crankshaft, Turbine } from "./mechanical";
+import { type Crankshaft, Turbine, FuelCell } from "./mechanical";
 
 export const MAX_CHANNELS = 8;
 export const MAX_SAMPLES = 16384;
@@ -120,7 +120,11 @@ export class Sampler {
     this.sampleValue(SampleName.molar_ratio_h2o, c.gas.mol_ratio_h2o);
     this.sampleValue(
       SampleName.turbine_burn_rate,
-      node.piston instanceof Turbine ? node.piston.burn_rate : 0,
+      node.piston instanceof Turbine
+        ? node.piston.burn_rate
+        : node.piston instanceof FuelCell
+          ? node.piston.reaction_rate
+          : 0,
     );
     this.channel_index++;
   }

@@ -8,7 +8,7 @@ import {
 } from "../sim/sampler";
 import { type Node, NodeType, NODE_NAME_STRING, countNodeEdges } from "../sim/nodes";
 import { type Engine } from "../sim/engine";
-import { type Piston, type PowerCell } from "../sim/mechanical";
+import { type Piston, type PowerCell, type FuelCell } from "../sim/mechanical";
 import { LowpassFilter } from "../sim/filters";
 import { panicMessage } from "../sim/chamber";
 import { waveTable } from "../sim/wave";
@@ -314,6 +314,44 @@ function drawTurbineCell(r: Renderer, engine: Engine, _p: PowerCell, x: number, 
   r.fillRect({ x: cx - 2, y: cy - 2, w: 4, h: 4 }, engine.can_ignite ? channelColor(3) : LINE_COLOR);
 }
 
+// Fuel-cell stack: a column of cell plates with a spinning motor rotor and a
+// green power glow that intensifies with the reaction rate.
+function drawFuelCellCell(r: Renderer, engine: Engine, p: PowerCell, x: number, y: number): void {
+  const cx = x + ROTOR_HALF_W;
+  const cy = y + ROTOR_HALF_W + 8;
+  const w = ROTOR_CELL_W;
+  // Housing.
+  r.rect({ x, y: cy - ROTOR_HALF_W, w, h: w }, CONTAINER_COLOR);
+  // Stacked cell plates (horizontal lines).
+  const plates = 5;
+  const plateColor = channelColor(5);
+  for (let k = 1; k < plates; k++) {
+    const py = cy - ROTOR_HALF_W + (w * k) / plates;
+    r.line({ x: x + 3, y: py }, { x: x + w - 3, y: py }, plateColor);
+  }
+  // Spinning motor rotor at center.
+  const fc = p as FuelCell;
+  const a = engine.crankshaft.theta_r;
+  const rotorColor = channelColor(6);
+  const rad = ROTOR_HALF_W * 0.45;
+  for (let k = 0; k < 4; k++) {
+    const ang = a + (2.0 * PI_R * k) / 4.0;
+    r.line(
+      { x: cx, y: cy },
+      { x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang) },
+      rotorColor,
+    );
+  }
+  // Power glow — green, brightness tracks reaction_rate.
+  const glow = engine.can_ignite ? fc.reaction_rate : 0;
+  if (glow > 0.01) {
+    const gs = 3 + glow * 5;
+    r.fillRect({ x: cx - gs / 2, y: cy - gs / 2, w: gs, h: gs }, channelColor(2));
+  } else {
+    r.fillRect({ x: cx - 2, y: cy - 2, w: 4, h: 4 }, LINE_COLOR);
+  }
+}
+
 function drawPistons(r: Renderer, engine: Engine): void {
   let x = MID_X;
   let y = MID_Y - 32;
@@ -334,6 +372,11 @@ function drawPistons(r: Renderer, engine: Engine): void {
       }
       if (p.kind === "turbine") {
         drawTurbineCell(r, engine, p, x, y);
+        x += PISTON_SPACE + ROTOR_CELL_W;
+        continue;
+      }
+      if (p.kind === "fuelcell") {
+        drawFuelCellCell(r, engine, p, x, y);
         x += PISTON_SPACE + ROTOR_CELL_W;
         continue;
       }

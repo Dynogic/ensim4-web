@@ -5,7 +5,7 @@ import { FOUR_PI_R, TWO_PI_R, SIX_PI_R } from "./constants";
 import { Engine } from "./engine";
 import { Node, NodeType } from "./nodes";
 import { makeChamber } from "./chamber";
-import { Piston, Rotor, OpposedPiston, Quasiturbine, Stirling, Turbine, Sparkplug, Valve } from "./mechanical";
+import { Piston, Rotor, OpposedPiston, Quasiturbine, Stirling, Turbine, FuelCell, Sparkplug, Valve } from "./mechanical";
 
 export interface CylConfig {
   name: string;
@@ -116,6 +116,13 @@ export interface CylConfig {
   turbine_torque_constant?: number;
   turbine_spool_mass_kg?: number;
   turbine_spool_radius_m?: number;
+  // Fuel cell (electrochemical): constant-volume stack, H2 + O2 → H2O drives a
+  // motor. Instant torque response (no spool); consumes O2, produces H2O.
+  fuelcell?: boolean;
+  fuelcell_stack_volume_m3?: number;
+  fuelcell_torque_constant?: number;
+  fuelcell_rotor_mass_kg?: number;
+  fuelcell_rotor_radius_m?: number;
   // 4-stroke cycle length this engine's valves/spark are timed against.
   // Default 4π (4-stroke piston). A 2-stroke uses 2π; a Wankel chamber uses 6π
   // (auto-set when rotor fields are present).
@@ -190,6 +197,8 @@ export function buildEngine(cfg: CylConfig): Engine {
   const isQuasiturbine = cfg.quasiturbine ?? false;
   const isStirling = cfg.stirling ?? false;
   const isTurbine = cfg.turbine ?? false;
+  const isFuelCell = cfg.fuelcell ?? false;
+  const isContinuous = isTurbine || isFuelCell;  // always-open valves (flow-through)
   const cellCycle = cfg.cycle_r ?? (isQuasiturbine ? TWO_PI_R : isRotor ? SIX_PI_R : FOUR_PI_R);
 
   for (let i = 0; i < N; i++) {
@@ -204,7 +213,7 @@ export function buildEngine(cfg: CylConfig): Engine {
     ir.valve.ramp_r = cfg.irunner_valve_ramp_r;
     if (cfg.irunner_valve_close_r != null) ir.valve.close_r = cfg.irunner_valve_close_r;
     if (cfg.sleeve) ir.valve.profile = "sleeve";
-    if (isTurbine) ir.valve.close_r = cellCycle;   // continuous intake (always open)
+    if (isContinuous) ir.valve.close_r = cellCycle;   // continuous intake (always open)
     ir.next = [idx.pist(i)];
     nodes[idx.ir(i)] = ir;
 
@@ -223,14 +232,23 @@ export function buildEngine(cfg: CylConfig): Engine {
     pvalve.ramp_r = cfg.piston_valve_ramp_r;
     if (cfg.piston_valve_close_r != null) pvalve.close_r = cfg.piston_valve_close_r;
     if (cfg.sleeve) pvalve.profile = "sleeve";
-    if (isTurbine) pvalve.close_r = cellCycle;     // continuous outflow (always open)
+    if (isContinuous) pvalve.close_r = cellCycle;     // continuous outflow (always open)
     const pspark = new Sparkplug();
     pspark.cycle_r = cellCycle;
     pspark.engage_r = theta + cfg.sparkplug_engage_r;
     pspark.on_r = cfg.sparkplug_on_r;
 
-    let cell: Piston | Rotor | OpposedPiston | Quasiturbine | Stirling | Turbine;
-    if (isTurbine) {
+    let cell: Piston | Rotor | OpposedPiston | Quasiturbine | Stirling | Turbine | FuelCell;
+    if (isFuelCell) {
+      const fc = new FuelCell(pchamber, pvalve, pspark);
+      fc.stack_volume_m3 = cfg.fuelcell_stack_volume_m3!;
+      fc.torque_constant = cfg.fuelcell_torque_constant!;
+      fc.rotor_mass_kg = cfg.fuelcell_rotor_mass_kg!;
+      fc.rotor_radius_m = cfg.fuelcell_rotor_radius_m!;
+      fc.dynamic_friction_n_m_s_per_r = cfg.piston_dynamic_friction_n_m_s_per_r;
+      fc.static_friction_n_m_s_per_r = cfg.piston_static_friction_n_m_s_per_r;
+      cell = fc;
+    } else if (isTurbine) {
       const tb = new Turbine(pchamber, pvalve, pspark);
       tb.combustor_volume_m3 = cfg.turbine_combustor_volume_m3!;
       tb.torque_constant = cfg.turbine_torque_constant!;
@@ -356,6 +374,7 @@ export function buildEngine(cfg: CylConfig): Engine {
   engine.is_steam = cfg.steam ?? false;
   engine.is_turbine = cfg.turbine ?? false;
   engine.is_jet = cfg.jet ?? false;
+  engine.is_fuelcell = cfg.fuelcell ?? false;
   engine.volume = cfg.sound_volume;
   engine.no_throttle = cfg.no_throttle;
   engine.low_throttle = cfg.low_throttle;
@@ -1074,6 +1093,32 @@ export const ENGINE_JET: CylConfig = {
   limiter_cutoff_r_per_s: 3000.0,           // ~28k rpm spool
 };
 
+// Fuel cell (PEM): electrochemical H2 + O2 → H2O drives an electric motor.
+// Constant-volume stack (no P·dV); torque = K × reaction_rate (instant, no
+// spool). Consumes O2 from the air charge, produces H2O, runs far cooler than a
+// combustor. Silent, instant-response power — press D to enable the reaction.
+export const ENGINE_FUELCELL: CylConfig = {
+  ...baseCylConfig(),
+  name: "Fuel Cell (PEM)",
+  sound_volume: 0.3,
+  radial_spacing: 3.0,
+  fuelcell: true,
+  fuelcell_stack_volume_m3: 5.0e-4,
+  fuelcell_torque_constant: 220,           // torque = K × reaction_rate (0..1)
+  fuelcell_rotor_mass_kg: 1.2,
+  fuelcell_rotor_radius_m: 0.06,
+  piston_dynamic_friction_n_m_s_per_r: 0.01,
+  piston_static_friction_n_m_s_per_r: 0.2,
+  piston_thetas_r: [0],
+  eplenum_assignment: [0],
+  num_eplenums: 1,
+  sparkplug_on_r: 0.0,                    // no spark — electrochemical
+  crankshaft_mass_kg: 1.0,
+  flywheel_mass_kg: 1.5,
+  flywheel_radius_m: 0.06,
+  limiter_cutoff_r_per_s: 2000.0,
+};
+
 // --- Scuderi split-cycle (custom crossover topology) ------------------------
 
 // One Scuderi split-pair: a compressor piston A (no spark) pumps charge
@@ -1188,6 +1233,7 @@ export function buildScuderi(cfg: CylConfig): Engine {
   engine.is_steam = cfg.steam ?? false;
   engine.is_turbine = cfg.turbine ?? false;
   engine.is_jet = cfg.jet ?? false;
+  engine.is_fuelcell = cfg.fuelcell ?? false;
   engine.volume = cfg.sound_volume;
   engine.no_throttle = cfg.no_throttle;
   engine.low_throttle = cfg.low_throttle;
@@ -1227,7 +1273,7 @@ export const ALL_ENGINES: CylConfig[] = [
   ENGINE_V_TWIN, ENGINE_V6, ENGINE_FLAT_TWIN, ENGINE_I5, ENGINE_WANKEL_3R,
   ENGINE_DIESEL_V8, ENGINE_2STROKE_TRIPLE, ENGINE_QUASITURBINE,
   ENGINE_STIRLING, ENGINE_STEAM, ENGINE_TURBINE, ENGINE_SCUDERI,
-  ENGINE_JET,
+  ENGINE_JET, ENGINE_FUELCELL,
 ];
 
 export const ENGINE_GROUPS: { label: string; configs: CylConfig[] }[] = [
@@ -1240,5 +1286,5 @@ export const ENGINE_GROUPS: { label: string; configs: CylConfig[] }[] = [
   { label: "2-Stroke", configs: [ENGINE_2STROKE_SINGLE, ENGINE_2STROKE_TRIPLE] },
   { label: "Alt-Cycle / Valve", configs: [ENGINE_SLEEVE_I6, ENGINE_OPPOSED_TWIN, ENGINE_SCUDERI] },
   { label: "Rotary", configs: [ENGINE_WANKEL_1R, ENGINE_WANKEL_2R, ENGINE_WANKEL_3R, ENGINE_QUASITURBINE] },
-  { label: "External / Turbine", configs: [ENGINE_STIRLING, ENGINE_STEAM, ENGINE_TURBINE, ENGINE_JET] },
+  { label: "External / Turbine", configs: [ENGINE_STIRLING, ENGINE_STEAM, ENGINE_TURBINE, ENGINE_JET, ENGINE_FUELCELL] },
 ];
