@@ -148,7 +148,9 @@ export class Limiter {
   cutoff_angular_velocity_r_per_s = 0;
   relaxed_angular_velocity_r_per_s = 0;
   is_limiting = false;
+  enabled = true;                // toggle: when false, maybeLimit is a no-op (no rev limit)
   maybeLimit(crank: Crankshaft, canIgnite: { value: boolean }): void {
+    if (!this.enabled) return;
     const delta = this.cutoff_angular_velocity_r_per_s - crank.angular_velocity_r_per_s;
     if (delta < 0.0) {
       this.is_limiting = true;

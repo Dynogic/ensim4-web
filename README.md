@@ -106,6 +106,7 @@ Click the page once first (browsers block audio until a user gesture), then:
 | **Y** | Toggle 1-D CFD exhaust solver (on by default) |
 | **T** | Toggle 8192-tap convolution reverb |
 | **U** | Toggle scope plot low-pass filter |
+| **X** | Toggle rev limiter (kill it and watch piston engines run away) |
 | **P / I / E / C / N** | Select pistons / intakes / exhausts / clear / next node |
 | click a node | Inspect that node on the scope plots |
 | **Engine dropdown** | Switch engine at runtime, grouped by family |

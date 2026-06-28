@@ -140,6 +140,7 @@ const sabController: Controller = {
   cfd: () => cmdWriter?.push(OP.CFD),
   convo: () => cmdWriter?.push(OP.CONVO),
   plotFilter: () => cmdWriter?.push(OP.PLOTFILTER),
+  limiter: () => cmdWriter?.push(OP.LIMITER),
   select: (mode) => cmdWriter?.push(OP.SELECT, SELECT_INDEX[mode]),
   toggleNode: (i) => cmdWriter?.push(OP.TOGGLE_NODE, i),
   switchEngine: (id) => cmdWriter?.push(OP.SWITCH, id),
@@ -171,6 +172,7 @@ const legacyController: Controller = {
   cfd: () => engine.enableCfd(!engine.use_cfd),
   convo: () => { engine.use_convolution = !engine.use_convolution; },
   plotFilter: () => { engine.use_plot_filter = !engine.use_plot_filter; },
+  limiter: () => { engine.limiter.enabled = !engine.limiter.enabled; },
   select: (mode) => {
     if (mode === "pistons") { deselectAllNodes(engine.nodes); selectNodes(engine.nodes, NodeType.piston); }
     else if (mode === "intakes") selectIntakes();

@@ -16,6 +16,7 @@ export const OP = {
   SELECT: 7,      // arg: 0=pistons 1=intakes 2=exhausts 3=clear 4=next
   TOGGLE_NODE: 8, // arg: node index
   SWITCH: 9,      // arg: engine config id (index into CFGS)
+  LIMITER: 11,    // toggle rev limiter on/off
 } as const;
 
 const HEAD = 0;

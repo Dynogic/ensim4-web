@@ -95,6 +95,7 @@ function applyCommand(op: number, arg: number): void {
     case OP.CFD: engine.enableCfd(!engine.use_cfd); break;
     case OP.CONVO: engine.use_convolution = !engine.use_convolution; break;
     case OP.PLOTFILTER: engine.use_plot_filter = !engine.use_plot_filter; break;
+    case OP.LIMITER: engine.limiter.enabled = !engine.limiter.enabled; break;
     case OP.SELECT:
       if (arg === 0) { deselectAllNodes(engine.nodes); selectNodes(engine.nodes, NodeType.piston); }
       else if (arg === 1) selectIntakes();

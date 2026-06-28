@@ -30,6 +30,7 @@ export interface Controller {
   cfd(): void;
   convo(): void;
   plotFilter(): void;
+  limiter(): void;
   select(mode: SelectMode): void;
   toggleNode(i: number): void;
   switchEngine(id: number): void;
@@ -54,6 +55,7 @@ export function setupControls(controller: Controller, engineGroups: EngineGroup[
       case "y": controller.cfd(); break;
       case "u": controller.plotFilter(); break;
       case "t": controller.convo(); break;
+      case "x": controller.limiter(); break;
     }
   });
 
@@ -148,6 +150,7 @@ export function setupControls(controller: Controller, engineGroups: EngineGroup[
   mk(gView, "CFD [y]", () => controller.cfd());
   mk(gView, "Convolution [t]", () => controller.convo());
   mk(gView, "Plot filter [u]", () => controller.plotFilter());
+  mk(gView, "Limiter [x]", () => controller.limiter());
   mk(gView, "Pistons [p]", () => controller.select("pistons"));
   mk(gView, "Intakes [i]", () => controller.select("intakes"));
   mk(gView, "Exhausts [e]", () => controller.select("exhausts"));
