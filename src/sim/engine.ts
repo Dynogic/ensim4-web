@@ -240,9 +240,9 @@ export class Engine {
         fc.throttle_open = this.throttle_open_ratio;
         const o2avail = Math.min(1.0, c.gas.mol_ratio_o2 / 0.21);
         if (c.gas.mol_ratio_o2 > 0.001 && fc.throttle_open > 0.0) {
-          reactFuelCell(c, fc.throttle_open * 0.08);
+          reactFuelCell(c, (0.15 + 0.85 * fc.throttle_open) * 0.04);
         }
-        fc.reaction_rate = fc.throttle_open * o2avail;
+        fc.reaction_rate = (0.15 + 0.85 * fc.throttle_open) * o2avail;
       }
     }
   }
