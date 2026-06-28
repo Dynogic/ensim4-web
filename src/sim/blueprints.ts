@@ -1100,7 +1100,7 @@ export const ENGINE_JET: CylConfig = {
 export const ENGINE_FUELCELL: CylConfig = {
   ...baseCylConfig(),
   name: "Fuel Cell (PEM)",
-  sound_volume: 0.3,
+  sound_volume: 0.05,
   radial_spacing: 3.0,
   fuelcell: true,
   fuelcell_stack_volume_m3: 5.0e-4,
